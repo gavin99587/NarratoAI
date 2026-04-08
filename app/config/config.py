@@ -82,6 +82,7 @@ def save_config():
         _cfg["ui"] = ui
         _cfg["tts_qwen"] = tts_qwen
         _cfg["indextts2"] = indextts2
+        _cfg["doubaotts"] = doubaotts
         f.write(toml.dumps(_cfg))
 
 
@@ -96,6 +97,7 @@ ui = _cfg.get("ui", {})
 frames = _cfg.get("frames", {})
 tts_qwen = _cfg.get("tts_qwen", {})
 indextts2 = _cfg.get("indextts2", {})
+doubaotts = _cfg.get("doubaotts", {})
 
 hostname = socket.gethostname()
 

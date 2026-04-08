@@ -26,7 +26,8 @@ def get_tts_engine_options():
         "azure_speech": "Azure Speech Services",
         "tencent_tts": "腾讯云 TTS",
         "qwen3_tts": "通义千问 Qwen3 TTS",
-        "indextts2": "IndexTTS2 语音克隆"
+        "indextts2": "IndexTTS2 语音克隆",
+        "doubaotts": "豆包语音 TTS"
     }
 
 
@@ -62,6 +63,12 @@ def get_tts_engine_descriptions():
             "features": "零样本语音克隆，上传参考音频即可合成相同音色的语音，需要本地或私有部署",
             "use_case": "下载地址：https://pan.quark.cn/s/0767c9bcefd5",
             "registration": None
+        },
+        "doubaotts": {
+            "title": "豆包语音 TTS",
+            "features": "火山引擎豆包语音合成，支持多种音色和情感，国内访问速度快",
+            "use_case": "需要高质量中文语音合成的用户",
+            "registration": "https://www.volcengine.com/product/voice-tech"
         }
     }
 
@@ -147,6 +154,8 @@ def render_tts_settings(tr):
         render_qwen3_tts_settings(tr)
     elif selected_engine == "indextts2":
         render_indextts2_tts_settings(tr)
+    elif selected_engine == "doubaotts":
+        render_doubaotts_settings(tr)
 
     # 4. 试听功能
     render_voice_preview_new(tr, selected_engine)
@@ -703,6 +712,250 @@ def render_indextts2_tts_settings(tr):
         config.ui["voice_name"] = f"indextts2:{reference_audio}"
 
 
+def render_doubaotts_settings(tr):
+    """渲染豆包语音 TTS 设置"""
+    # AK 输入
+    ak = st.text_input(
+        "Access Key",
+        value=config.doubaotts.get("ak", ""),
+        help="火山引擎 Access Key"
+    )
+
+    # SK 输入
+    sk = st.text_input(
+        "Secret Key",
+        value=config.doubaotts.get("sk", ""),
+        type="password",
+        help="火山引擎 Secret Key"
+    )
+
+    # AppID 输入
+    appid = st.text_input(
+        "AppID",
+        value=config.doubaotts.get("appid", ""),
+        help="豆包语音应用 AppID"
+    )
+
+    # Token 输入
+    token = st.text_input(
+        "Token",
+        value=config.doubaotts.get("token", ""),
+        type="password",
+        help="豆包语音应用 Token"
+    )
+
+    # 集群配置
+    cluster = st.text_input(
+        "集群",
+        value=config.doubaotts.get("cluster", "volcano_tts"),
+        help="业务集群，标准音色使用 volcano_tts"
+    )
+
+    # 音色选择
+    # 在线音色列表（从文档中提取）
+    voice_options = {
+        "BV700_V2_streaming": "灿灿 2.0",
+        "BV705_streaming": "炀炀",
+        "BV701_V2_streaming": "擎苍 2.0",
+        "BV001_V2_streaming": "通用女声 2.0",
+        "BV700_streaming": "灿灿",
+        "BV406_V2_streaming": "超自然音色-梓梓2.0",
+        "BV406_streaming": "超自然音色-梓梓",
+        "BV407_V2_streaming": "超自然音色-燃燃2.0",
+        "BV407_streaming": "超自然音色-燃燃",
+        "BV001_streaming": "通用女声",
+        "BV002_streaming": "通用男声",
+        "BV701_streaming": "擎苍",
+        "BV123_streaming": "阳光青年",
+        "BV120_streaming": "反卷青年",
+        "BV119_streaming": "通用赘婿",
+        "BV115_streaming": "古风少御",
+        "BV107_streaming": "霸气青叔",
+        "BV100_streaming": "质朴青年",
+        "BV104_streaming": "温柔淑女",
+        "BV004_streaming": "开朗青年",
+        "BV113_streaming": "甜宠少御",
+        "BV102_streaming": "儒雅青年",
+        "BV405_streaming": "甜美小源",
+        "BV007_streaming": "亲切女声",
+        "BV009_streaming": "知性女声",
+        "BV419_streaming": "诚诚",
+        "BV415_streaming": "童童",
+        "BV008_streaming": "亲切男声",
+        "BV408_streaming": "译制片男声",
+        "BV426_streaming": "懒小羊",
+        "BV428_streaming": "清新文艺女声",
+        "BV403_streaming": "鸡汤女声",
+        "BV158_streaming": "智慧老者",
+        "BV157_streaming": "慈爱姥姥",
+        "BR001_streaming": "说唱小哥",
+        "BV410_streaming": "活力解说男",
+        "BV411_streaming": "影视解说小帅",
+        "BV437_streaming": "解说小帅-多情感",
+        "BV412_streaming": "影视解说小美",
+        "BV159_streaming": "纨绔青年",
+        "BV418_streaming": "直播一姐",
+        "BV142_streaming": "沉稳解说男",
+        "BV143_streaming": "潇洒青年",
+        "BV056_streaming": "阳光男声",
+        "BV005_streaming": "活泼女声",
+        "BV064_streaming": "小萝莉",
+        "BV051_streaming": "奶气萌娃",
+        "BV063_streaming": "动漫海绵",
+        "BV417_streaming": "动漫海星",
+        "BV050_streaming": "动漫小新",
+        "BV061_streaming": "天才童声",
+        "BV401_streaming": "促销男声",
+        "BV402_streaming": "促销女声",
+        "BV006_streaming": "磁性男声",
+        "BV011_streaming": "新闻女声",
+        "BV012_streaming": "新闻男声",
+        "BV034_streaming": "知性姐姐-双语",
+        "BV033_streaming": "温柔小哥",
+        "BV511_streaming": "慵懒女声-Ava",
+        "BV505_streaming": "议论女声-Alicia",
+        "BV138_streaming": "情感女声-Lawrence",
+        "BV027_streaming": "美式女声-Amelia",
+        "BV502_streaming": "讲述女声-Amanda",
+        "BV503_streaming": "活力女声-Ariana",
+        "BV504_streaming": "活力男声-Jackson",
+        "BV421_streaming": "天才少女",
+        "BV702_streaming": "Stefan",
+        "BV506_streaming": "天真萌娃-Lily",
+        "BV040_streaming": "亲切女声-Anna",
+        "BV516_streaming": "澳洲男声-Henry",
+        "BV520_streaming": "元气少女",
+        "BV521_streaming": "萌系少女",
+        "BV522_streaming": "气质女声",
+        "BV524_streaming": "日语男声",
+        "BV531_streaming": "活力男声Carlos（巴西地区）",
+        "BV530_streaming": "活力女声（巴西地区）",
+        "BV065_streaming": "气质御姐（墨西哥地区）",
+        "BV021_streaming": "东北老铁",
+        "BV020_streaming": "东北丫头",
+        "BV704_streaming": "方言灿灿",
+        "BV210_streaming": "西安佟掌柜",
+        "BV217_streaming": "沪上阿姐",
+        "BV213_streaming": "广西表哥",
+        "BV025_streaming": "甜美台妹",
+        "BV227_streaming": "台普男声",
+        "BV026_streaming": "港剧男神",
+        "BV424_streaming": "广东女仔",
+        "BV212_streaming": "相声演员",
+        "BV019_streaming": "重庆小伙",
+        "BV221_streaming": "四川甜妹儿",
+        "BV423_streaming": "重庆幺妹儿",
+        "BV214_streaming": "乡村企业家",
+        "BV226_streaming": "湖南妹坨",
+        "BV216_streaming": "长沙靓女"
+    }
+    
+    saved_voice_type = config.ui.get("doubaotts_voice_type", "BV700_streaming")
+    if saved_voice_type not in voice_options:
+        voice_options[saved_voice_type] = f"自定义音色 ({saved_voice_type})"
+    
+    selected_voice_display = st.selectbox(
+        "音色选择",
+        options=list(voice_options.values()),
+        index=list(voice_options.keys()).index(saved_voice_type) if saved_voice_type in voice_options else 0,
+        help="选择豆包语音 TTS 音色"
+    )
+    
+    # 获取实际的音色ID
+    voice_type = list(voice_options.keys())[
+        list(voice_options.values()).index(selected_voice_display)
+    ]
+    
+    # 高级参数折叠面板
+    with st.expander("🔧 高级参数", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 语速调节
+            voice_rate = st.slider(
+                "语速调节",
+                min_value=0.2,
+                max_value=3.0,
+                value=config.ui.get("doubaotts_rate", 1.0),
+                step=0.1,
+                help="调节语音速度 (0.2-3.0)"
+            )
+            
+            # 音量调节
+            voice_volume = st.slider(
+                "音量调节",
+                min_value=0.1,
+                max_value=2.0,
+                value=config.doubaotts.get("volume", 1.0),
+                step=0.1,
+                help="调节语音音量 (0.1-2.0)"
+            )
+        
+        with col2:
+            # 音高调节
+            voice_pitch = st.slider(
+                "音高调节",
+                min_value=0.5,
+                max_value=1.5,
+                value=config.doubaotts.get("pitch", 1.0),
+                step=0.1,
+                help="调节语音音高 (0.5-1.5)"
+            )
+            
+            # 句尾静音时长
+            silence_duration = st.slider(
+                "句尾静音时长 (秒)",
+                min_value=0.0,
+                max_value=2.0,
+                value=config.doubaotts.get("silence_duration", 0.125),
+                step=0.05,
+                help="调节句尾静音时长 (0.0-2.0秒)"
+            )
+    
+    # 显示API Key申请流程
+    with st.expander("💡 豆包语音 TTS API Key申请流程", expanded=False):
+        st.write("**申请步骤：**")
+        st.write("1. 打开 [https://console.volcengine.com/iam/keymanage](https://console.volcengine.com/iam/keymanage)")
+        st.write("2. 新建 Access Key 和 Secret Key")
+        st.write("3. 打开 [https://www.volcengine.com/product/voice-tech](https://www.volcengine.com/product/voice-tech)")
+        st.write("4. 点击立即使用")
+        st.write("5. 在最左边的API服务中心找到音频生成下面的语音合成（注意：是语音合成，不是语音合成大模型）")
+        st.write("6. 翻到最下面获取 APPID 和 Access Token")
+        
+        st.write("")
+        st.info("💡 请将获取到的 Access Key、Secret Key、AppID 和 Token 填写到上方的配置中")
+    
+    # 保存配置
+    config.doubaotts["ak"] = ak
+    config.doubaotts["sk"] = sk
+    config.doubaotts["appid"] = appid
+    config.doubaotts["token"] = token
+    config.doubaotts["cluster"] = cluster
+    config.doubaotts["volume"] = voice_volume
+    config.doubaotts["pitch"] = voice_pitch
+    config.doubaotts["silence_duration"] = silence_duration
+    config.ui["doubaotts_voice_type"] = voice_type
+    config.ui["doubaotts_rate"] = voice_rate
+    config.ui["voice_name"] = voice_type # 兼容性
+    st.session_state['voice_rate'] = voice_rate # 确保语速参数被保存到session state
+
+    # 显示配置状态
+    if ak and sk and appid and token:
+        st.success("✅ 豆包语音 TTS 配置已设置")
+    else:
+        missing = []
+        if not ak:
+            missing.append("Access Key")
+        if not sk:
+            missing.append("Secret Key")
+        if not appid:
+            missing.append("AppID")
+        if not token:
+            missing.append("Token")
+        if missing:
+            st.warning(f"⚠️ 请配置: {', '.join(missing)}")
+
+
 def render_voice_preview_new(tr, selected_engine):
     """渲染新的语音试听功能"""
     if st.button("🎵 试听语音合成", use_container_width=True):
@@ -746,6 +999,11 @@ def render_voice_preview_new(tr, selected_engine):
                 voice_name = f"indextts2:{reference_audio}"
             voice_rate = 1.0  # IndexTTS2 不支持速度调节
             voice_pitch = 1.0  # IndexTTS2 不支持音调调节
+        elif selected_engine == "doubaotts":
+            voice_type = config.ui.get("doubaotts_voice_type", "BV700_streaming")
+            voice_name = voice_type
+            voice_rate = config.ui.get("doubaotts_rate", 1.0)
+            voice_pitch = 1.0  # 豆包语音 TTS 不支持音调调节
 
         if not voice_name:
             st.error("请先配置语音设置")

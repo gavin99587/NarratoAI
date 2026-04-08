@@ -1116,6 +1116,125 @@ def should_use_azure_speech_services(voice_name: str) -> bool:
     return False
 
 
+def doubaotts_tts(text: str, voice_name: str, voice_file: str, speed: float = 1.0) -> Union[SubMaker, None]:
+    """
+    使用豆包语音 TTS 生成语音
+    """
+    # 读取配置
+    doubaotts_cfg = getattr(config, "doubaotts", {}) or {}
+    appid = doubaotts_cfg.get("appid", "")
+    token = doubaotts_cfg.get("token", "")
+    ak = doubaotts_cfg.get("ak", "")
+    sk = doubaotts_cfg.get("sk", "")
+    cluster = doubaotts_cfg.get("cluster", "volcano_tts")
+    
+    if not appid or not token:
+        logger.error("豆包语音 TTS 配置未完成")
+        return None
+
+    # 准备参数
+    voice_type = voice_name
+    safe_speed = float(max(0.2, min(3.0, speed)))
+    text = text.strip()
+
+    # 构建请求参数
+    import uuid
+    reqid = str(uuid.uuid4())
+    
+    # 获取高级参数
+    volume = doubaotts_cfg.get("volume", 1.0)
+    pitch = doubaotts_cfg.get("pitch", 1.0)
+    silence_duration = doubaotts_cfg.get("silence_duration", 0.125)
+    
+    payload = {
+        "app": {
+            "appid": appid,
+            "token": token,
+            "cluster": cluster
+        },
+        "user": {
+            "uid": "NarratoAI"
+        },
+        "audio": {
+            "voice_type": voice_type,
+            "encoding": "mp3",
+            "rate": 24000,
+            "speed_ratio": safe_speed,
+            "volume_ratio": float(volume),
+            "pitch_ratio": float(pitch)
+        },
+        "request": {
+            "reqid": reqid,
+            "text": text,
+            "text_type": "plain",
+            "operation": "query"
+        }
+    }
+    
+    # 如果设置了句尾静音时长，添加到请求参数中
+    if silence_duration > 0:
+        payload["audio"]["silence_duration"] = float(silence_duration)
+
+    # API 地址
+    url = "https://openspeech.bytedance.com/api/v1/tts"
+    
+    # 构建请求头（使用Bearer Token认证）
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer;{token}"
+    }
+
+    for i in range(3):
+        try:
+            logger.info(f"=== 豆包语音 TTS 请求参数 (第 {i+1} 次调用) ===")
+            
+            # 发送请求
+            import requests
+            # 处理代理设置
+            proxies = None
+            proxy_enabled = config.proxy.get("enabled", False)
+            if proxy_enabled:
+                proxy_url = config.proxy.get("https", config.proxy.get("http", ""))
+                if proxy_url:
+                    proxies = {"https": proxy_url, "http": proxy_url}
+            response = requests.post(url, json=payload, headers=headers, proxies=proxies, timeout=60)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("code") == 3000:
+                    # 成功
+                    audio_data = result.get("data", "")
+                    if audio_data:
+                        # 解码 base64 音频数据
+                        import base64
+                        audio_bytes = base64.b64decode(audio_data)
+                        
+                        # 写入文件
+                        with open(voice_file, "wb") as f:
+                            f.write(audio_bytes)
+                        
+                        logger.success(f"豆包语音 TTS 合成成功: {voice_file}")
+                        
+                        # 创建 SubMaker 对象（简化版，不包含时间戳）
+                        sub_maker = new_sub_maker()
+                        return sub_maker
+                    else:
+                        logger.error("豆包语音 TTS 响应中无音频数据")
+                else:
+                    logger.error(f"豆包语音 TTS 失败: {result.get('message', '未知错误')}")
+            else:
+                logger.error(f"豆包语音 TTS API 请求失败: {response.status_code}, {response.text}")
+                
+            if i < 2:
+                time.sleep(1)
+        except Exception as e:
+            logger.error(f"豆包语音 TTS 错误: {str(e)}")
+            if i < 2:
+                time.sleep(3)
+    
+    return None
+
+
 def tts(
     text: str, voice_name: str, voice_rate: float, voice_pitch: float, voice_file: str, tts_engine: str
 ) -> Union[SubMaker, None]:
@@ -1147,6 +1266,10 @@ def tts(
     if tts_engine == "indextts2":
         logger.info("分发到 IndexTTS2")
         return indextts2_tts(text, voice_name, voice_file, speed=voice_rate)
+    
+    if tts_engine == "doubaotts":
+        logger.info("分发到豆包语音 TTS")
+        return doubaotts_tts(text, voice_name, voice_file, speed=voice_rate)
 
     # Fallback for unknown engine - default to azure v1
     logger.warning(f"未知的 TTS 引擎: '{tts_engine}', 将默认使用 Edge TTS (Azure V1)。")
@@ -1606,8 +1729,8 @@ def tts_multiple(task_id: str, list_script: list, voice_name: str, voice_rate: f
                              f"或者使用其他 tts 引擎")
                 continue
             else:
-                # SoulVoice、Qwen3、IndexTTS2 引擎不生成字幕文件
-                if is_soulvoice_voice(voice_name) or is_qwen_engine(tts_engine) or tts_engine == "indextts2":
+                # SoulVoice、Qwen3、IndexTTS2、豆包语音 引擎不生成字幕文件
+                if is_soulvoice_voice(voice_name) or is_qwen_engine(tts_engine) or tts_engine == "indextts2" or tts_engine == "doubaotts":
                     # 获取实际音频文件的时长
                     duration = get_audio_duration_from_file(audio_file)
                     if duration <= 0:
@@ -1615,8 +1738,27 @@ def tts_multiple(task_id: str, list_script: list, voice_name: str, voice_rate: f
                         duration = get_audio_duration(sub_maker)
                         if duration <= 0:
                             # 最后的 fallback，基于文本长度估算
-                            duration = max(1.0, len(text) / 3.0)
-                            logger.warning(f"无法获取音频时长，使用文本估算: {duration:.2f}秒")
+                            # 对于英文文本，使用更准确的估算方法
+                            # 英文平均语速约为每分钟150-180个单词，即每秒2.5-3个单词
+                            # 对于中文文本，约为每秒3-4字
+                            import re
+                            # 计算英文单词数
+                            english_words = len(re.findall(r'\b\w+\b', text))
+                            # 计算中文字符数
+                            chinese_chars = len(re.findall(r'[\u4e00-\u9fa5]', text))
+                            
+                            if english_words > chinese_chars:
+                                # 主要是英文文本
+                                # 假设平均每个单词需要0.35秒
+                                estimated_duration = max(1.0, english_words * 0.35)
+                            else:
+                                # 主要是中文文本
+                                # 假设平均每个汉字需要0.3秒
+                                estimated_duration = max(1.0, chinese_chars * 0.3)
+                            
+                            # 确保估算时长合理
+                            duration = max(1.0, estimated_duration)
+                            logger.warning(f"无法获取音频时长，使用文本估算: {duration:.2f}秒 (英文单词: {english_words}, 中文字符: {chinese_chars})")
                     # 不创建字幕文件
                     subtitle_file = ""
                 else:
@@ -1658,8 +1800,6 @@ def get_audio_duration_from_file(audio_file: str) -> float:
         # 但实际文件还包含头部信息，所以调整系数
         estimated_duration = max(1.0, file_size / 20000)  # 调整为更保守的估算
 
-        # 对于中文语音，根据文本长度进行二次校正
-        # 一般中文语音速度约为 3-4 字/秒
         logger.warning(f"使用文件大小估算音频时长: {estimated_duration:.2f}秒")
         return estimated_duration
     except Exception as e:

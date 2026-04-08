@@ -114,9 +114,25 @@
     do_sample = true
     num_beams = 3
     repetition_penalty = 10.0
+[doubaotts]
+    # 豆包语音 TTS 配置
+    # 申请流程：
+    # 1. 打开 https://console.volcengine.com/iam/keymanage 新建 Access Key 和 Secret Key
+    # 2. 打开 https://www.volcengine.com/product/voice-tech 点击立即使用
+    # 3. 在 API 服务中心找到音频生成下面的语音合成，获取 APPID 和 Token
+    ak = ""
+    sk = ""
+    appid = ""
+    token = ""
+    cluster = "volcano_tts"
+    
+    # 高级参数
+    volume = 1.0
+    pitch = 1.0
+    silence_duration = 0.125
 
 [ui]
-    # TTS引擎选择 (edge_tts, azure_speech, soulvoice, tencent_tts, tts_qwen)
+    # TTS引擎选择 (edge_tts, azure_speech, soulvoice, tencent_tts, tts_qwen, doubaotts)
     tts_engine = "edge_tts"
 
     # Edge TTS 配置
@@ -130,6 +146,10 @@
     azure_volume = 80
     azure_rate = 1.0
     azure_pitch = 0
+    
+    # 豆包语音 TTS 配置
+    doubaotts_voice_type = "BV700_V2_streaming"
+    doubaotts_rate = 1.0
 
 ##########################################
 # 代理和网络配置
