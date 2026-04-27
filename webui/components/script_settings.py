@@ -327,6 +327,8 @@ def short_drama_summary(tr):
     # 检查是否已经处理过字幕文件
     if 'subtitle_file_processed' not in st.session_state:
         st.session_state['subtitle_file_processed'] = False
+
+    render_fun_asr_transcription(tr)
     
     subtitle_file = st.file_uploader(
         tr("上传字幕文件"),
@@ -399,6 +401,95 @@ def short_drama_summary(tr):
     temperature = st.slider("temperature", 0.0, 2.0, 0.7)
     st.session_state['temperature'] = temperature
     return video_theme
+
+
+def render_fun_asr_transcription(tr):
+    """使用阿里百炼 Fun-ASR 从本地音视频转写生成字幕。"""
+    def clear_fun_asr_subtitle_state():
+        st.session_state['subtitle_path'] = None
+        st.session_state['subtitle_content'] = None
+        st.session_state['subtitle_file_processed'] = False
+
+    with st.expander("阿里百炼 Fun-ASR 字幕转录", expanded=False):
+        st.caption("上传本地音频/视频后，将自动上传到阿里百炼临时存储并通过 fun-asr 生成 SRT 字幕。")
+        st.markdown(
+            "API Key 获取地址："
+            "[https://bailian.console.aliyun.com/?tab=model#/api-key]"
+            "(https://bailian.console.aliyun.com/?tab=model#/api-key)"
+        )
+
+        api_key = st.text_input(
+            "阿里百炼 API Key",
+            value=config.fun_asr.get("api_key", ""),
+            type="password",
+            help="请输入你自己的阿里百炼 API Key；保存配置后会写入本地 config.toml",
+            key="fun_asr_api_key",
+        )
+        uploaded_media = st.file_uploader(
+            "上传需要转录的音频/视频",
+            type=[
+                "aac", "amr", "avi", "flac", "flv", "m4a", "mkv", "mov",
+                "mp3", "mp4", "mpeg", "ogg", "opus", "wav", "webm", "wma", "wmv",
+            ],
+            accept_multiple_files=False,
+            key="fun_asr_media_uploader",
+        )
+
+        if st.button("转写生成字幕", key="fun_asr_transcribe"):
+            if not api_key.strip():
+                clear_fun_asr_subtitle_state()
+                st.error("请先输入阿里百炼 API Key")
+                return
+            if uploaded_media is None:
+                clear_fun_asr_subtitle_state()
+                st.error("请先上传需要转录的音频或视频文件")
+                return
+
+            try:
+                clear_fun_asr_subtitle_state()
+                from app.services import fun_asr_subtitle
+
+                config.fun_asr["api_key"] = api_key.strip()
+                config.fun_asr["model"] = "fun-asr"
+                config.save_config()
+
+                temp_dir = utils.temp_dir("fun_asr")
+                safe_filename = os.path.basename(uploaded_media.name)
+                media_path = os.path.join(temp_dir, safe_filename)
+                file_name, file_extension = os.path.splitext(safe_filename)
+                if os.path.exists(media_path):
+                    timestamp = time.strftime("%Y%m%d%H%M%S")
+                    media_path = os.path.join(temp_dir, f"{file_name}_{timestamp}{file_extension}")
+
+                with open(media_path, "wb") as f:
+                    f.write(uploaded_media.getbuffer())
+
+                subtitle_name = f"{os.path.splitext(os.path.basename(media_path))[0]}_fun_asr.srt"
+                subtitle_path = os.path.join(utils.subtitle_dir(), subtitle_name)
+
+                with st.spinner("正在使用阿里百炼 Fun-ASR 转写字幕，请稍候..."):
+                    generated_path = fun_asr_subtitle.create_with_fun_asr(
+                        local_file=media_path,
+                        subtitle_file=subtitle_path,
+                        api_key=api_key.strip(),
+                    )
+
+                if not generated_path or not os.path.exists(generated_path):
+                    clear_fun_asr_subtitle_state()
+                    st.error("Fun-ASR 转写失败：未生成字幕文件")
+                    return
+
+                with open(generated_path, "r", encoding="utf-8") as f:
+                    subtitle_content = f.read()
+
+                st.session_state['subtitle_path'] = generated_path
+                st.session_state['subtitle_content'] = subtitle_content
+                st.session_state['subtitle_file_processed'] = True
+                st.success(f"字幕转写成功: {os.path.basename(generated_path)}")
+            except Exception as e:
+                clear_fun_asr_subtitle_state()
+                logger.error(f"Fun-ASR 字幕转写失败: {traceback.format_exc()}")
+                st.error(f"Fun-ASR 字幕转写失败: {str(e)}")
 
 
 def render_script_buttons(tr, params):

@@ -93,6 +93,12 @@
     # 访问 https://bailian.console.aliyun.com/?tab=model#/api-key 获取你的 API 密钥
     api_key = ""
     model_name = "qwen3-tts-flash"
+
+[fun_asr]
+    # 阿里百炼 Fun-ASR 字幕转录配置
+    # 访问 https://bailian.console.aliyun.com/?tab=model#/api-key 获取你的 API 密钥
+    api_key = ""
+    model = "fun-asr"
     
 [indextts2]
     # IndexTTS2 语音克隆配置
