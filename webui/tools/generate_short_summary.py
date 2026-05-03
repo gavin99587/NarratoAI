@@ -23,6 +23,60 @@ from app.services.llm.migration_adapter import SubtitleAnalyzerAdapter
 import re
 
 
+def _parse_timecode_to_seconds(timecode: str) -> float:
+    """解析 HH:MM:SS,mmm / HH:MM:SS.mmm 为秒数"""
+    t = str(timecode).strip().replace(".", ",")
+    hms, ms = t.split(",")
+    h, m, s = map(int, hms.split(":"))
+    return h * 3600 + m * 60 + s + int(ms) / 1000.0
+
+
+def log_script_duration_details(items: list) -> None:
+    """打印脚本分段时长与总时长统计日志"""
+    if not isinstance(items, list):
+        logger.warning("[SCRIPT_DURATION] items 不是列表，跳过时长统计")
+        return
+
+    logger.info("===== [SCRIPT_DURATION] 解说稿时长统计开始 =====")
+
+    total_duration = 0.0
+    parsed_count = 0
+
+    for i, item in enumerate(items, 1):
+        _id = item.get("_id", i) if isinstance(item, dict) else i
+        ost = item.get("OST", "") if isinstance(item, dict) else ""
+        timestamp = item.get("timestamp", "") if isinstance(item, dict) else ""
+
+        if not timestamp or "-" not in str(timestamp):
+            logger.warning(f"[SCRIPT_DURATION] id={_id} 无有效 timestamp: {timestamp}")
+            continue
+
+        try:
+            start_str, end_str = str(timestamp).split("-", 1)
+            start_sec = _parse_timecode_to_seconds(start_str)
+            end_sec = _parse_timecode_to_seconds(end_str)
+            duration = end_sec - start_sec
+            if duration < 0:
+                logger.warning(f"[SCRIPT_DURATION] id={_id} 时间戳异常(结束早于开始): {timestamp}")
+                continue
+
+            parsed_count += 1
+            total_duration += duration
+            logger.info(
+                f"[SCRIPT_DURATION] id={_id} ost={ost} ts={timestamp} duration={duration:.3f}s"
+            )
+        except Exception as e:
+            logger.warning(f"[SCRIPT_DURATION] id={_id} 解析失败, ts={timestamp}, err={e}")
+
+    mm = int(total_duration // 60)
+    ss = int(total_duration % 60)
+    logger.info(
+        f"[SCRIPT_DURATION] total_segments={len(items)} parsed_segments={parsed_count} "
+        f"total_duration={total_duration:.3f}s ({mm:02d}:{ss:02d})"
+    )
+    logger.info("===== [SCRIPT_DURATION] 解说稿时长统计结束 =====")
+
+
 def parse_and_fix_json(json_string):
     """
     解析并修复JSON字符串
@@ -262,6 +316,9 @@ def generate_script_short_sunmmary(params, subtitle_path, video_theme, temperatu
                 st.error("生成的解说文案缺少必要的'items'字段")
                 logger.error(f"JSON结构错误，缺少items字段: {narration_dict}")
                 st.stop()
+
+            # 记录脚本时长统计日志（每段 + 总时长）
+            log_script_duration_details(narration_dict['items'])
 
             script = json.dumps(narration_dict['items'], ensure_ascii=False, indent=2)
 
